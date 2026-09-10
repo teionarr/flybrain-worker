@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>flyworker — hire a fly</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>🪰 Flyworker</h1>
+    <p class="tagline">Don't hire people. Don't hire AI. <strong>Hire a fly.</strong></p>
+  </header>
+
+  <main>
+    <section id="setup">
+      <label for="title">Your management title</label>
+      <input id="title" type="text" placeholder="Director of Fly Operations" />
+      <button id="new-question">🎟️ New ticket</button>
+      <span id="billable">billable: —</span>
+    </section>
+
+    <section id="question" class="hidden">
+      <h2 id="client"></h2>
+      <p id="ask"></p>
+      <ul id="answers"></ul>
+      <p class="hint">Answer is hidden. Nudge the fly until it points at something.</p>
+    </section>
+
+    <div class="columns">
+      <section id="table-panel">
+        <h3>🪵 The table <small>where the fly is</small></h3>
+        <div id="grid"></div>
+      </section>
+
+      <section id="brain-panel">
+        <h3>🧠 The brain <small>what it thinks</small></h3>
+        <div id="readout">—</div>
+      </section>
+
+      <section id="mgmt-panel">
+        <h3>👔 Management</h3>
+        <div id="controls">
+          <button data-kind="food" title="Place food to attract the fly">🍞 Food</button>
+          <button data-kind="loom" title="Scare the fly away">🎈 Loom</button>
+          <button data-kind="poke" title="Prod the fly">👉 Poke</button>
+          <button data-kind="run" title="Let the clock tick">▶ Run</button>
+          <button id="offer" title="Ask the fly what its current spot means">💬 It offers…</button>
+        </div>
+        <div id="offer-box" class="hidden"></div>
+      </section>
+    </div>
+
+    <section id="review" class="hidden">
+      <h3>📄 Performance review</h3>
+      <p id="review-text"></p>
+      <p id="review-flavor" class="hint"></p>
+    </section>
+
+    <section id="wall">
+      <h3>🧱 Wall of reviews <small>players from around the internet</small></h3>
+      <div id="wall-list"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>
+      Fly brain: <a href="https://github.com/freeman-1984-coder/flybrain-sdk" target="_blank">flybrain-sdk</a> (MIT) · parody, no real flies harmed
+    </p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
