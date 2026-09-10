@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FLYWORKER — hire a fly</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="hud">
+    <div class="brand">
+      <span class="logo">🪰</span>
+      <span class="title">FLYWORKER</span>
+      <span class="sub">don't hire people · don't hire AI · hire a fly</span>
+    </div>
+    <div class="hud-stats">
+      <span class="stat">TICKET <b id="ticket-id">—</b></span>
+      <span class="stat">NUDGES <b id="nudges">0</b></span>
+      <span class="stat">REJECTS <b id="rejects">0</b></span>
+      <span class="stat">BILLABLE <b id="billable">—</b></span>
+      <span class="stat">MODE <b id="wiremode">offline</b></span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- Main viewport: the table -->
+    <div class="panel viewport-panel">
+      <div class="panel-head">THE TABLE <span class="dim">· where it is</span></div>
+      <canvas id="table" width="900" height="520"></canvas>
+      <div class="viewport-foot">
+        <span>🍞 food: attract</span>
+        <span>🎈 loom: repel</span>
+        <span>👉 poke: twitch</span>
+        <span class="dim">click a cell to target food/loom</span>
+      </div>
+    </div>
+
+    <!-- Right column: look inside + management -->
+    <div class="side">
+      <div class="panel">
+        <div class="panel-head">LOOK INSIDE <span class="dim">· what it thinks</span></div>
+        <div class="subhead">01 / SENSORY INPUT</div>
+        <div id="sensory" class="readout">—</div>
+        <div class="subhead">02 / NEURAL ACTIVITY</div>
+        <div id="neural" class="readout">—</div>
+        <div class="subhead">03 / MOTOR OUTPUT</div>
+        <div id="motor" class="readout">—</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">MANAGEMENT</div>
+        <input id="title" class="title-input" placeholder="Your management title" />
+        <div class="controls">
+          <button data-kind="food">🍞 FOOD</button>
+          <button data-kind="loom">🎈 LOOM</button>
+          <button data-kind="poke">👉 POKE</button>
+          <button data-kind="run">▶ RUN</button>
+        </div>
+        <div id="offering" class="offering hidden">
+          <div class="answer" id="offer-answer"></div>
+          <div class="actions">
+            <button id="ok-btn">✅ OK → client</button>
+            <button id="reject-btn">❌ REJECT (hurt the fly)</button>
+          </div>
+        </div>
+        <button id="offer-btn" class="wide">💬 THE FLY OFFERS…</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">THE TICKET</div>
+        <div id="client" class="client">—</div>
+        <div id="ask" class="ask">—</div>
+        <ol id="answers" class="answers"></ol>
+        <button id="new-btn" class="wide secondary">🎟️ NEW TICKET</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance review -->
+  <div id="review" class="panel review hidden">
+    <div class="panel-head">PERFORMANCE REVIEW</div>
+    <div id="review-text" class="review-text"></div>
+    <div id="review-flavor" class="review-flavor"></div>
+    <button id="next-btn" class="wide">🎟️ NEXT TICKET</button>
+  </div>
+
+  <!-- Shared wall -->
+  <div class="panel wall">
+    <div class="panel-head">WALL OF REVIEWS <span class="dim">· players around the world</span></div>
+    <div id="wall-list" class="wall-list"></div>
+  </div>
+
+  <footer>
+    Fly brain (simulated): inspired by
+    <a href="https://github.com/freeman-1984-coder/flybrain-sdk" target="_blank">flybrain-sdk</a> (MIT).
+    Parody. No flies or clients harmed.
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
