@@ -121,11 +121,31 @@ class Table {
     this.brain = new FlyBrain();
     this.fx = w / 3;
     this.fy = h / 2;
-    this.heading = 0;
+    this.heading = 0; // radians; this is the fly's gaze/direction
     this.food = []; // {x,y,strength,ticks}
     this.looms = []; // {x,y,side}
     this.pokeTimer = 0;
     this.lastMotor = {};
+    this.zoneCount = 5;
+  }
+
+  // The 5 answer zones: vertical bands labeled A..E left-to-right.
+  zones() {
+    const zs = [];
+    for (let i = 0; i < this.zoneCount; i++) {
+      const x0 = (this.w / this.zoneCount) * i;
+      const x1 = (this.w / this.zoneCount) * (i + 1);
+      zs.push({ index: i, label: String.fromCharCode(65 + i), x0, x1, y0: 0, y1: this.h });
+    }
+    return zs;
+  }
+
+  // Which zone (answer index) is the fly currently inside, or null.
+  currentZone() {
+    for (const z of this.zones()) {
+      if (this.fx >= z.x0 && this.fx < z.x1) return z.index;
+    }
+    return null;
   }
 
   placeFood(x, y, strength = 1) {
@@ -178,6 +198,17 @@ class Table {
     this.looms = [];
 
     this.heading += (m.turn_left - m.turn_right) * 0.5;
+
+    // Steer toward the nearest food when present, so the gaze follows intent.
+    const nf = this._nearestFood();
+    if (nf) {
+      const targetAngle = Math.atan2(nf.y - this.fy, nf.x - this.fx);
+      let diff = targetAngle - this.heading;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      this.heading += diff * 0.15;
+    }
+
     const speed = m.walk * 0.6;
     let nx = this.fx + Math.cos(this.heading) * speed;
     let ny = this.fy + Math.sin(this.heading) * speed;
@@ -318,8 +349,10 @@ const G = {
   billable: 0,
   finished: false,
   review: null,
-  offer: null,
+  offer: null, // the answer currently being confirmed/rejected
   selected: null,
+  pendingZone: null, // zone the fly just entered (pending confirm/reject)
+  lastPromptedZone: null, // avoid re-prompting the same zone without leaving it
 };
 
 function newTicket() {
@@ -332,28 +365,32 @@ function newTicket() {
   G.finished = false;
   G.review = null;
   G.offer = null;
+  G.pendingZone = null;
+  G.lastPromptedZone = null;
   $("#review").classList.add("hidden");
   $("#offering").classList.add("hidden");
   renderQuestion();
   renderAll();
 }
 
-function cellIndex(x, y, q) {
-  q = q || G.question;
-  const n = q.answers.length;
-  let h = (x * 374761393 + y * 668265263 + q.id * 1442695040888963407) * 2654435761;
-  h = (h ^ (h >>> 13)) >>> 0;
-  h = Math.imul(h, 2654435761) >>> 0;
-  return h % n;
-}
-
-function offer() {
-  if (!G.table || !G.question) return;
-  const x = Math.round(G.table.fx);
-  const y = Math.round(G.table.fy);
-  const idx = cellIndex(x, y);
-  G.offer = { index: idx, answer: G.question.answers[idx], cell: [x, y] };
-  $("#offer-answer").textContent = `💬 The fly offers: "${G.offer.answer}"`;
+// When the fly enters an answer zone, surface a confirm/reject prompt.
+function checkZone() {
+  if (!G.table || !G.question || G.finished || G.offer) return;
+  const zi = G.table.currentZone();
+  if (zi === null) {
+    G.pendingZone = null;
+    G.lastPromptedZone = null;
+    $("#offering").classList.add("hidden");
+    return;
+  }
+  // Only prompt when entering a zone for the first time (not re-prompting the
+  // same zone while the fly is still inside after a reject).
+  if (zi === G.lastPromptedZone) return;
+  G.pendingZone = zi;
+  G.lastPromptedZone = zi;
+  G.offer = { index: zi, answer: G.question.answers[zi], zone: zi };
+  $("#offer-answer").textContent =
+    `The fly is in zone ${String.fromCharCode(65 + zi)} — it offers: "${G.offer.answer}"`;
   $("#offering").classList.remove("hidden");
 }
 
@@ -361,18 +398,25 @@ function decide(decision) {
   if (!G.offer) return;
   if (decision === "reject") {
     G.rejects += 1;
+    // Rejection reprimands the fly: loom at it + poke, so it scrambles away.
     G.table.placeLoom(Math.round(G.table.fx), Math.round(G.table.fy));
     G.table.poke();
     G.table.run(20);
     G.offer = null;
+    G.pendingZone = null;
+    G.lastPromptedZone = null; // allow re-offering if the fly returns later
     $("#offering").classList.add("hidden");
     renderAll();
     return;
   }
-  // "ok": ship it.
+  // "ok": ship it — the answer in the fly's current zone.
   const q = G.question;
   const correct = G.offer.index === q.correct;
   G.finished = true;
+  if (correct) {
+    // Happy fly: drop some food reward.
+    G.table.placeFood(Math.round(G.table.fx), Math.round(G.table.fy), 1);
+  }
   G.review = {
     text: finalReview(G.title, G.nudges, G.rejects, correct),
     correct,
@@ -391,6 +435,7 @@ function decide(decision) {
   };
   Wall.add(entry).then(() => renderWall());
   renderReview();
+  G.offer = null;
   $("#offering").classList.add("hidden");
 }
 
@@ -403,6 +448,7 @@ function renderAll() {
   renderHud();
   drawTable();
   renderReadouts();
+  checkZone();
 }
 
 function renderHud() {
@@ -421,7 +467,7 @@ function renderQuestion() {
   ol.innerHTML = "";
   G.question.answers.forEach((a, i) => {
     const li = document.createElement("li");
-    li.textContent = a;
+    li.textContent = `${String.fromCharCode(65 + i)}) ${a}`;
     ol.appendChild(li);
   });
 }
@@ -448,13 +494,16 @@ function renderReadouts() {
     .join("");
 
   const motor = $("#motor");
+  const zone = G.table.currentZone();
+  const zoneTxt = zone === null ? "none" : String.fromCharCode(65 + zone);
   motor.innerHTML = ["walk", "turn_left", "turn_right", "jump"]
     .map((k) => {
       const v = m[k] || 0;
       const pct = Math.round(v * 100);
       return `<div class="row"><span>${k}</span><span class="bar">${"█".repeat(Math.round(pct / 10))} ${pct}%</span></div>`;
     })
-    .join("") + `<div class="row dim"><span>position</span><span>${G.table.fx.toFixed(1)}, ${G.table.fy.toFixed(1)}</span></div>`;
+    .join("") + `<div class="row dim"><span>zone</span><span>${zoneTxt}</span></div>` +
+    `<div class="row dim"><span>pos</span><span>${G.table.fx.toFixed(1)}, ${G.table.fy.toFixed(1)}</span></div>`;
 }
 
 function drawTable() {
@@ -467,13 +516,43 @@ function drawTable() {
   const cw = CW / t.w;
   const ch = CH / t.h;
 
-  // grid lines
-  ctx.strokeStyle = "#1a212a";
+  // Answer zones (A–E) as colored vertical bands.
+  const zoneColors = [
+    "rgba(58,122,180,0.16)", "rgba(120,84,184,0.16)", "rgba(40,156,116,0.16)",
+    "rgba(200,140,40,0.16)", "rgba(190,60,80,0.16)",
+  ];
+  const zoneAccents = ["#3a7ab4", "#7854b8", "#289c74", "#c88c28", "#be3c50"];
+  const curZone = t.currentZone();
+  t.zones().forEach((z) => {
+    const x0 = z.x0, x1 = z.x1;
+    // band background
+    ctx.fillStyle = zoneColors[z.index] || "rgba(255,255,255,0.05)";
+    ctx.fillRect(x0 * cw, 0, (x1 - x0) * cw, CH);
+    // stronger tint when the fly is inside
+    if (curZone === z.index) {
+      ctx.fillStyle = zoneAccents[z.index] + "55";
+      ctx.fillRect(x0 * cw, 0, (x1 - x0) * cw, CH);
+    }
+    // zone label
+    ctx.fillStyle = zoneAccents[z.index];
+    ctx.font = "bold 15px monospace";
+    ctx.textAlign = "center";
+    const label = G.question ? `${z.label}. ${G.question.answers[z.index]}` : z.label;
+    // truncate long answers for the band header
+    const maxLen = Math.max(8, Math.floor((x1 - x0) * cw / 8));
+    const short = label.length > maxLen ? label.slice(0, maxLen - 1) + "…" : label;
+    ctx.fillText(short, (x0 + x1) / 2 * cw, 18);
+    // zone boundary line
+    ctx.strokeStyle = zoneAccents[z.index] + "66";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0 * cw, 26); ctx.lineTo(x0 * cw, CH); ctx.stroke();
+  });
+  ctx.textAlign = "left";
+
+  // grid lines (faint)
+  ctx.strokeStyle = "#151c25";
   ctx.lineWidth = 1;
-  for (let x = 0; x <= t.w; x++) {
-    ctx.beginPath(); ctx.moveTo(x * cw, 0); ctx.lineTo(x * cw, CH); ctx.stroke();
-  }
-  for (let y = 0; y <= t.h; y++) {
+  for (let y = 1; y < t.h; y++) {
     ctx.beginPath(); ctx.moveTo(0, y * ch); ctx.lineTo(CW, y * ch); ctx.stroke();
   }
 
@@ -485,6 +564,15 @@ function drawTable() {
     ctx.fill();
   }
 
+  // looming markers (red ring where a loom was placed)
+  for (const l of t.looms) {
+    ctx.strokeStyle = "#fb5f76";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(l.x * cw + cw / 2, l.y * ch + ch / 2, cw * 0.4, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   // selected cell highlight
   if (G.selected) {
     ctx.strokeStyle = "#f2b632";
@@ -492,22 +580,59 @@ function drawTable() {
     ctx.strokeRect(G.selected[0] * cw, G.selected[1] * ch, cw, ch);
   }
 
-  // the fly
+  // the fly: body + gaze/heading arrow
   const fx = t.fx * cw + cw / 2;
   const fy = t.fy * ch + ch / 2;
+  const r = cw * 0.34;
+  ctx.save();
+  ctx.translate(fx, fy);
+  ctx.rotate(t.heading);
+
+  // gaze cone (where it's "looking")
+  const gazeLen = cw * 1.4;
+  ctx.fillStyle = "rgba(242,182,50,0.12)";
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.arc(0, 0, gazeLen, -0.5, 0.5);
+  ctx.closePath();
+  ctx.fill();
+
+  // direction arrow
+  ctx.strokeStyle = "#f2b632";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(gazeLen, 0);
+  ctx.stroke();
   ctx.fillStyle = "#f2b632";
   ctx.beginPath();
-  ctx.arc(fx, fy, cw * 0.32, 0, Math.PI * 2);
+  ctx.moveTo(gazeLen + 6, 0);
+  ctx.lineTo(gazeLen - 4, -5);
+  ctx.lineTo(gazeLen - 4, 5);
+  ctx.closePath();
   ctx.fill();
-  // wings
+
+  // fly body (ellipse) in the rotated frame — long axis along gaze
+  ctx.fillStyle = "#f2b632";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.55, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // eye dot at the head
+  ctx.fillStyle = "#0b0e12";
+  ctx.beginPath();
+  ctx.arc(r * 0.55, 0, r * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // wings (animated, unrotated so they flutter)
   ctx.strokeStyle = "#f2b632";
   ctx.lineWidth = 1.5;
   const wing = Math.sin(Date.now() / 120) * 4;
   ctx.beginPath();
-  ctx.moveTo(fx - cw * 0.3, fy - wing);
-  ctx.lineTo(fx - cw * 0.6, fy - 8 - wing);
-  ctx.moveTo(fx + cw * 0.3, fy - wing);
-  ctx.lineTo(fx + cw * 0.6, fy - 8 - wing);
+  ctx.moveTo(fx - cw * 0.28, fy - wing);
+  ctx.lineTo(fx - cw * 0.55, fy - 10 - wing);
+  ctx.moveTo(fx + cw * 0.28, fy - wing);
+  ctx.lineTo(fx + cw * 0.55, fy - 10 - wing);
   ctx.stroke();
 }
 
@@ -536,7 +661,6 @@ $$("button[data-kind]").forEach((btn) => {
   });
 });
 
-$("#offer-btn").addEventListener("click", offer);
 $("#ok-btn").addEventListener("click", () => decide("ok"));
 $("#reject-btn").addEventListener("click", () => decide("reject"));
 $("#new-btn").addEventListener("click", newTicket);

@@ -9,7 +9,7 @@ globalThis.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) =>
 globalThis.window = { FLYWORKER_CONFIG: {} };
 globalThis.fetch = async () => { throw new Error('offline'); };
 
-const M = new Function(pure + `; return { FlyBrain, Table, QUESTIONS, pickQuestion, finalReview, cellIndex, Wall, mulberry32, clamp01 };`)();
+const M = new Function(pure + `; return { FlyBrain, Table, QUESTIONS, pickQuestion, finalReview, Wall, mulberry32, clamp01 };`)();
 
 (async () => {
   // Brain behaviors
@@ -26,28 +26,42 @@ const M = new Function(pure + `; return { FlyBrain, Table, QUESTIONS, pickQuesti
   console.log('loom-L -> turn_right>0:', loomM.turn_right > 0, loomM);
   console.log('touch -> jump>0:', touchM.jump > 0, touchM);
 
-  // Table drift toward food
+  // Zones: 5 bands A-E, spanning full width
   const t = new M.Table(28, 16);
-  t.placeFood(25, 3, 1);
-  const sx = t.fx;
-  for (let i = 0; i < 80; i++) t.run(20);
-  console.log('drift toward food:', sx.toFixed(1), '->', t.fx.toFixed(1));
+  const zones = t.zones();
+  console.log('zone count:', zones.length);
+  console.log('zone labels:', zones.map(z => z.label).join(''));
+  console.log('zones cover full width:', zones[0].x0 === 0 && zones[4].x1 === 28);
 
-  // Questions have ids
-  console.log('questions:', M.QUESTIONS.length, '| ids 1..N:', M.QUESTIONS.map(q => q.id).join(','));
+  // currentZone detection
+  t.fx = 0.5; // far left -> zone A (index 0)
+  console.log('currentZone at x=0.5 -> A:', t.currentZone() === 0);
+  t.fx = 14; // middle -> around zone C (index 2)
+  console.log('currentZone at x=14 ->', t.currentZone(), '(expect 2 = C)');
+  t.fx = 27; // far right -> zone E (index 4)
+  console.log('currentZone at x=27 -> E:', t.currentZone() === 4);
+  t.fx = 5.6; // boundary of A/B -> A (index 0) since x < x1
+  console.log('currentZone at x=5.5 (A/B edge):', t.currentZone());
 
-  // cellIndex deterministic
-  console.log('cellIndex deterministic:', M.cellIndex(5, 5, M.QUESTIONS[0]) === M.cellIndex(5, 5, M.QUESTIONS[0]));
-  console.log('cellIndex in range:', M.cellIndex(12, 3, M.QUESTIONS[0]) >= 0 && M.cellIndex(12, 3, M.QUESTIONS[0]) < M.QUESTIONS[0].answers.length);
+  // fly steers toward food (gaze) — off-axis so heading must change
+  const t2 = new M.Table(28, 16);
+  t2.fx = 4; t2.fy = 2; t2.heading = 0;
+  t2.placeFood(20, 14, 1);
+  const before = t2.heading;
+  for (let i = 0; i < 40; i++) t2.run(10);
+  const target = Math.atan2(14 - 2, 20 - 4);
+  console.log('steer toward food:', before.toFixed(2), '->', t2.heading.toFixed(2), '(target ~', target.toFixed(2) + ')');
+  console.log('heading moved toward food:', Math.abs(t2.heading - target) < 0.5);
+
+  // questions
+  console.log('questions:', M.QUESTIONS.length, '| ids:', M.QUESTIONS.map(q => q.id).join(','));
 
   // review
-  const rv = M.finalReview('VP of Vibe', 9, 3, true);
-  console.log('review has title:', rv.includes('VP of Vibe'));
+  console.log('review has title:', M.finalReview('VP of Vibe', 9, 3, true).includes('VP of Vibe'));
 
-  // Wall
+  // wall
   await M.Wall.add({ manager_title: 'VP of Vibe', question: 'c', answer: 'a', correct: true, nudges_used: 1, rejects: 0, billable_hours: 1, timestamp: new Date().toISOString() });
-  const w = await M.Wall.load();
-  console.log('wall entries:', w.length);
+  console.log('wall entries:', (await M.Wall.load()).length);
 
   console.log('\nALL OK');
 })();
